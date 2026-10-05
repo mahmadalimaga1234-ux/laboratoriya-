@@ -7,7 +7,7 @@
   <style>
     * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
     body { background-color: #f0f4f8; margin: 0; padding: 15px; color: #2c3e50; }
-    .container { max-width: 1050px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    .container { max-width: 1100px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
     h2 { color: #1e3c72; text-align: center; margin-bottom: 20px; font-size: 24px; }
     
     .status-bar { display: flex; justify-content: space-between; align-items: center; background: #eef2f5; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; }
@@ -19,6 +19,8 @@
     .btn-sync { background-color: #27ae60; }
     .btn-sync:hover { background-color: #219150; }
     .btn-export { background-color: #f39c12; margin-left: 10px; }
+    .btn-edit { background-color: #2980b9; padding: 4px 8px; font-size: 12px; }
+    .btn-delete { background-color: #c0392b; padding: 4px 8px; font-size: 12px; margin-left: 4px; }
     
     .search-box { margin-bottom: 20px; position: relative; }
     .search-box input { width: 100%; padding: 12px 15px; font-size: 15px; border: 2px solid #cbd5e1; border-radius: 8px; outline: none; }
@@ -40,8 +42,13 @@
     .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
     .form-group input[readonly] { background-color: #f1f5f9; font-weight: 600; }
     
-    .table-container { overflow-x: auto; margin-top: 25px; }
-    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+    /* Табҳои дафтарҳо */
+    .tabs-container { display: flex; gap: 8px; margin-top: 30px; border-bottom: 2px solid #cbd5e1; padding-bottom: 5px; flex-wrap: wrap; }
+    .tab-btn { padding: 8px 16px; border: none; background: #e2e8f0; font-weight: 600; border-radius: 6px 6px 0 0; cursor: pointer; color: #475569; }
+    .tab-btn.active { background: #1e3c72; color: white; }
+
+    .table-container { overflow-x: auto; margin-top: 15px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 950px; }
     th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
     th { background-color: #1e3c72; color: white; white-space: nowrap; }
     tr:nth-child(even) { background-color: #f8fafc; }
@@ -67,6 +74,8 @@
   </div>
 
   <form id="regForm" onsubmit="savePatient(event)">
+    <input type="hidden" id="editId" value="">
+    
     <div class="form-section-title">Маълумоти асосӣ ва Рамз</div>
     <div class="form-grid">
       <div class="form-group">
@@ -86,8 +95,8 @@
     <div class="form-section-title">Маълумоти Бемор</div>
     <div class="form-grid">
       <div class="form-group">
-        <label>Рақами / Рамзи бақайдгирӣ:</label>
-        <input type="text" id="regNum" required placeholder="масалан: 001/2026">
+        <label>Рақами / Рамзи бақайдгирӣ (Автомат):</label>
+        <input type="text" id="regNum" required placeholder="Автоматӣ гузошта мешавад">
       </div>
       <div class="form-group">
         <label>Ному Насаб:</label>
@@ -148,10 +157,17 @@
       </div>
     </div>
 
-    <button type="submit" class="btn" style="width: 100%; margin-top: 20px; padding: 12px; font-size: 16px;">💾 Сабт кардан ба Дафтар</button>
+    <button type="submit" id="saveBtn" class="btn" style="width: 100%; margin-top: 20px; padding: 12px; font-size: 16px;">💾 Сабт кардан ба Дафтар</button>
   </form>
 
-  <div class="form-section-title" style="margin-top: 35px;">Дафтари сабтшудагон</div>
+  <div class="tabs-container">
+    <button class="tab-btn active" onclick="switchTab('Ҳама', this)">📋 Ҳамаи дафтарҳо</button>
+    <button class="tab-btn" onclick="switchTab('Глобали', this)">📕 Глобали</button>
+    <button class="tab-btn" onclick="switchTab('РОЙГОН', this)">📗 РОЙГОН</button>
+    <button class="tab-btn" onclick="switchTab('К 600', this)">📙 К 600</button>
+    <button class="tab-btn" onclick="switchTab('ИФА', this)">📘 ИФА</button>
+  </div>
+
   <div class="table-container">
     <table id="patientTable">
       <thead>
@@ -163,6 +179,8 @@
 </div>
 
 <script>
+  let activeTab = 'Ҳама';
+
   const dbCodes = [
     { code: "101", name: "Шахсоне, ки бо мубталоёни ВНМО/БПНМ дар алоқаву тамос буданд", book: "Глобали" },
     { code: "101.1", name: "алоқаи ҷинсӣ", book: "Глобали" },
@@ -240,12 +258,23 @@
     }
   }
 
+  function generateAutoRegNum(bookName) {
+    let patients = JSON.parse(localStorage.getItem('patients') || '[]');
+    let countInBook = patients.filter(p => p.book === bookName).length;
+    return countInBook + 1;
+  }
+
   function selectCode(item) {
     document.getElementById('code').value = item.code;
     document.getElementById('notebook').value = item.book;
     document.getElementById('category').value = item.name;
     document.getElementById('resultsList').style.display = 'none';
     document.getElementById('searchInput').value = `${item.code} - ${item.name}`;
+
+    // Автоматӣ гузоштани рақами бақайдгирии оянда
+    if (!document.getElementById('editId').value) {
+      document.getElementById('regNum').value = generateAutoRegNum(item.book);
+    }
 
     const globalFields = document.querySelectorAll('.field-global');
     const ifaFields = document.querySelectorAll('.field-ifa');
@@ -257,121 +286,178 @@
       globalFields.forEach(f => f.style.display = 'flex');
       ifaFields.forEach(f => f.style.display = 'none');
     }
-    
-    loadPatients();
   }
 
   function savePatient(e) {
     e.preventDefault();
     const book = document.getElementById('notebook').value;
+    const editId = document.getElementById('editId').value;
     
-    const patient = {
-      id: Date.now(),
-      book: book,
-      regNum: document.getElementById('regNum').value,
-      fullname: document.getElementById('fullname').value,
-      age: document.getElementById('age').value,
-      gender: document.getElementById('gender').value,
-      code: document.getElementById('code').value,
-      citizenship: document.getElementById('citizenship').value,
-      address: document.getElementById('address').value,
-      workplace: document.getElementById('workplace').value,
-      referredFrom: document.getElementById('referredFrom').value,
-      result: document.getElementById('result').value,
-      testDate: document.getElementById('testDate').value,
-      consultBefore: document.getElementById('consultBefore').value,
-      consultAfter: document.getElementById('consultAfter').value,
-      bloodDate: document.getElementById('bloodDate').value
-    };
-
     let patients = JSON.parse(localStorage.getItem('patients') || '[]');
-    patients.push(patient);
-    localStorage.setItem('patients', JSON.stringify(patients));
 
-    alert('Муваффақона ба дафтари ' + book + ' сабт шуд!');
+    if (editId) {
+      // Таҳрир (Изменить)
+      patients = patients.map(p => {
+        if (p.id == editId) {
+          return {
+            ...p,
+            regNum: document.getElementById('regNum').value,
+            fullname: document.getElementById('fullname').value,
+            age: document.getElementById('age').value,
+            gender: document.getElementById('gender').value,
+            citizenship: document.getElementById('citizenship').value,
+            address: document.getElementById('address').value,
+            workplace: document.getElementById('workplace').value,
+            referredFrom: document.getElementById('referredFrom').value,
+            result: document.getElementById('result').value,
+            testDate: document.getElementById('testDate').value,
+            consultBefore: document.getElementById('consultBefore').value,
+            consultAfter: document.getElementById('consultAfter').value,
+            bloodDate: document.getElementById('bloodDate').value
+          };
+        }
+        return p;
+      });
+      alert('Сабт муваффақона навсозӣ (изменить) شد!');
+    } else {
+      // Сабти нав
+      const patient = {
+        id: Date.now(),
+        book: book,
+        regNum: document.getElementById('regNum').value,
+        fullname: document.getElementById('fullname').value,
+        age: document.getElementById('age').value,
+        gender: document.getElementById('gender').value,
+        code: document.getElementById('code').value,
+        citizenship: document.getElementById('citizenship').value,
+        address: document.getElementById('address').value,
+        workplace: document.getElementById('workplace').value,
+        referredFrom: document.getElementById('referredFrom').value,
+        result: document.getElementById('result').value,
+        testDate: document.getElementById('testDate').value,
+        consultBefore: document.getElementById('consultBefore').value,
+        consultAfter: document.getElementById('consultAfter').value,
+        bloodDate: document.getElementById('bloodDate').value
+      };
+      patients.push(patient);
+      alert('Муваффақона ба дафтари ' + book + ' сабт шуд!');
+    }
+
+    localStorage.setItem('patients', JSON.stringify(patients));
+    resetForm();
+    loadPatients();
+  }
+
+  function resetForm() {
     document.getElementById('regForm').reset();
+    document.getElementById('editId').value = '';
+    document.getElementById('saveBtn').innerText = '💾 Сабт кардан ба Дафтар';
+    document.getElementById('saveBtn').style.backgroundColor = '#1e3c72';
     document.getElementById('testDate').valueAsDate = new Date();
     document.getElementById('bloodDate').valueAsDate = new Date();
+  }
+
+  function switchTab(bookName, btn) {
+    activeTab = bookName;
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
     loadPatients();
+  }
+
+  function editPatient(id) {
+    const patients = JSON.parse(localStorage.getItem('patients') || '[]');
+    const p = patients.find(item => item.id == id);
+    if (!p) return;
+
+    document.getElementById('editId').value = p.id;
+    document.getElementById('notebook').value = p.book;
+    document.getElementById('code').value = p.code;
+    document.getElementById('regNum').value = p.regNum;
+    document.getElementById('fullname').value = p.fullname;
+    document.getElementById('age').value = p.age;
+    document.getElementById('gender').value = p.gender;
+    document.getElementById('citizenship').value = p.citizenship;
+    document.getElementById('address').value = p.address;
+    document.getElementById('workplace').value = p.workplace;
+    document.getElementById('referredFrom').value = p.referredFrom;
+    document.getElementById('result').value = p.result;
+    document.getElementById('testDate').value = p.testDate;
+    document.getElementById('consultBefore').value = p.consultBefore || '';
+    document.getElementById('consultAfter').value = p.consultAfter || '';
+    document.getElementById('bloodDate').value = p.bloodDate || '';
+
+    const codeObj = dbCodes.find(c => c.code === p.code);
+    if (codeObj) {
+      document.getElementById('category').value = codeObj.name;
+      document.getElementById('searchInput').value = `${codeObj.code} - ${codeObj.name}`;
+    }
+
+    document.getElementById('saveBtn').innerText = '✏️ Навсозӣ кардан (Изменить)';
+    document.getElementById('saveBtn').style.backgroundColor = '#2980b9';
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }
+
+  function deletePatient(id) {
+    if (confirm('Оё мехоҳед ин сабтро канда (удалить) кунед?')) {
+      let patients = JSON.parse(localStorage.getItem('patients') || '[]');
+      patients = patients.filter(p => p.id != id);
+      localStorage.setItem('patients', JSON.stringify(patients));
+      loadPatients();
+    }
   }
 
   function loadPatients() {
     const patients = JSON.parse(localStorage.getItem('patients') || '[]');
-    const currentBook = document.getElementById('notebook').value || 'Глобали';
     
     const headerRow = document.getElementById('tableHeader');
     const tbody = document.querySelector('#patientTable tbody');
     tbody.innerHTML = '';
 
-    if (currentBook === 'ИФА') {
-      headerRow.innerHTML = `
-        <th>Рамзи Бақайдгирӣ</th>
-        <th>Ному Насаб</th>
-        <th>Сину Сол</th>
-        <th>Ҷинс</th>
-        <th>Рамз</th>
-        <th>Шаҳрвандӣ</th>
-        <th>Ҷои Истиқомат</th>
-        <th>Вазифа ё Ҷои Таҳсил</th>
-        <th>Аз куҷо фиристода шуд</th>
-        <th>Натиҷаи Ташхис</th>
-        <th>Санаи Хунгирӣ</th>
-        <th>Санаи Ташхис</th>
-      `;
-    } else {
-      headerRow.innerHTML = `
-        <th>Рақами бп қайдгири</th>
-        <th>Ному Насаб</th>
-        <th>Сину Сол</th>
-        <th>Ҷинс</th>
-        <th>Рамз</th>
-        <th>Шаҳрвандӣ</th>
-        <th>Ҷои Истиқомат</th>
-        <th>Ҷои кор ё Таҳсил</th>
-        <th>Аз куҷо фиристода шуд</th>
-        <th>Машварат то Ташхис</th>
-        <th>Натиҷаи Ташхис</th>
-        <th>Машварат Баъди Ташхис</th>
-        <th>Санаи Ташхис</th>
-      `;
+    headerRow.innerHTML = `
+      <th>Рақами бақайдгирӣ</th>
+      <th>Дафтар</th>
+      <th>Ному Насаб</th>
+      <th>Сину Сол</th>
+      <th>Ҷинс</th>
+      <th>Рамз</th>
+      <th>Шаҳрвандӣ</th>
+      <th>Ҷои Истиқомат</th>
+      <th>Ҷои кор / Таҳсил</th>
+      <th>Аз куҷо фиристода шуд</th>
+      <th>Натиҷа</th>
+      <th>Санаи Ташхис</th>
+      <th>Амалҳо</th>
+    `;
+
+    let filtered = patients;
+    if (activeTab !== 'Ҳама') {
+      filtered = patients.filter(p => p.book === activeTab);
     }
 
-    const filtered = patients.filter(p => p.book === currentBook || (currentBook !== 'ИФА' && p.book !== 'ИФА'));
+    filtered.slice().reverse().forEach(p => {
+      let badgeClass = 'bg-k600';
+      if(p.book === 'Глобали') badgeClass = 'bg-global';
+      if(p.book === 'РОЙГОН') badgeClass = 'bg-free';
+      if(p.book === 'ИФА') badgeClass = 'bg-ifa';
 
-    filtered.reverse().forEach(p => {
-      let tr = '';
-      if (currentBook === 'ИФА') {
-        tr = `<tr>
-          <td>${p.regNum}</td>
-          <td><b>${p.fullname}</b></td>
-          <td>${p.age}</td>
-          <td>${p.gender}</td>
-          <td><b>${p.code}</b></td>
-          <td>${p.citizenship}</td>
-          <td>${p.address}</td>
-          <td>${p.workplace}</td>
-          <td>${p.referredFrom}</td>
-          <td>${p.result}</td>
-          <td>${p.bloodDate}</td>
-          <td>${p.testDate}</td>
-        </tr>`;
-      } else {
-        tr = `<tr>
-          <td>${p.regNum}</td>
-          <td><b>${p.fullname}</b></td>
-          <td>${p.age}</td>
-          <td>${p.gender}</td>
-          <td><b>${p.code}</b></td>
-          <td>${p.citizenship}</td>
-          <td>${p.address}</td>
-          <td>${p.workplace}</td>
-          <td>${p.referredFrom}</td>
-          <td>${p.consultBefore || '-'}</td>
-          <td>${p.result}</td>
-          <td>${p.consultAfter || '-'}</td>
-          <td>${p.testDate}</td>
-        </tr>`;
-      }
+      const tr = `<tr>
+        <td><b>${p.regNum}</b></td>
+        <td><span class="badge ${badgeClass}">${p.book}</span></td>
+        <td><b>${p.fullname}</b></td>
+        <td>${p.age}</td>
+        <td>${p.gender}</td>
+        <td><b>${p.code}</b></td>
+        <td>${p.citizenship}</td>
+        <td>${p.address}</td>
+        <td>${p.workplace}</td>
+        <td>${p.referredFrom}</td>
+        <td>${p.result}</td>
+        <td>${p.testDate}</td>
+        <td style="white-space:nowrap;">
+          <button class="btn btn-edit" onclick="editPatient(${p.id})">✏️</button>
+          <button class="btn btn-delete" onclick="deletePatient(${p.id})">🗑️</button>
+        </td>
+      </tr>`;
       tbody.innerHTML += tr;
     });
   }
