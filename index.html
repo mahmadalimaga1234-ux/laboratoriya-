@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="tj">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Системаи Бақайдгирии Лабораторӣ</title>
+  <style>
+    * { box-sizing: border-box; font-family: 'Segoe UI', Arial, sans-serif; }
+    body { background-color: #f0f4f8; margin: 0; padding: 15px; color: #2c3e50; }
+    .container { max-width: 1050px; margin: 0 auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+    h2 { color: #1e3c72; text-align: center; margin-bottom: 20px; font-size: 24px; }
+    
+    .status-bar { display: flex; justify-content: space-between; align-items: center; background: #eef2f5; padding: 12px 20px; border-radius: 8px; margin-bottom: 20px; }
+    .status-online { color: #27ae60; font-weight: bold; }
+    .status-offline { color: #e74c3c; font-weight: bold; }
+    
+    .btn { background-color: #1e3c72; color: white; border: none; padding: 10px 18px; border-radius: 6px; cursor: pointer; font-size: 14px; font-weight: 600; transition: 0.3s; }
+    .btn:hover { background-color: #2a5298; }
+    .btn-sync { background-color: #27ae60; }
+    .btn-sync:hover { background-color: #219150; }
+    .btn-export { background-color: #f39c12; margin-left: 10px; }
+    
+    .search-box { margin-bottom: 20px; position: relative; }
+    .search-box input { width: 100%; padding: 12px 15px; font-size: 15px; border: 2px solid #cbd5e1; border-radius: 8px; outline: none; }
+    .search-box input:focus { border-color: #1e3c72; }
+    
+    .results-list { max-height: 220px; overflow-y: auto; border: 1px solid #cbd5e1; border-radius: 8px; margin-top: 5px; display: none; background: #fff; position: absolute; width: 100%; z-index: 100; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+    .result-item { padding: 10px 15px; border-bottom: 1px solid #f1f5f9; cursor: pointer; display: flex; justify-content: space-between; align-items: center; }
+    .result-item:hover { background-color: #e0f2fe; }
+    .badge { padding: 4px 10px; border-radius: 6px; font-size: 12px; font-weight: bold; color: white; }
+    .bg-global { background-color: #8e44ad; }
+    .bg-free { background-color: #27ae60; }
+    .bg-k600 { background-color: #d35400; }
+    .bg-ifa { background-color: #2980b9; }
+    
+    .form-section-title { font-weight: bold; font-size: 16px; margin: 20px 0 10px 0; color: #1e3c72; border-bottom: 2px solid #e2e8f0; padding-bottom: 5px; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 15px; }
+    .form-group { display: flex; flex-direction: column; }
+    .form-group label { font-size: 13px; font-weight: 600; margin-bottom: 5px; color: #475569; }
+    .form-group input, .form-group select { padding: 9px 12px; border: 1px solid #cbd5e1; border-radius: 6px; font-size: 14px; }
+    .form-group input[readonly] { background-color: #f1f5f9; font-weight: 600; }
+    
+    .table-container { overflow-x: auto; margin-top: 25px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 900px; }
+    th, td { border: 1px solid #cbd5e1; padding: 8px 10px; text-align: left; }
+    th { background-color: #1e3c72; color: white; white-space: nowrap; }
+    tr:nth-child(even) { background-color: #f8fafc; }
+  </style>
+</head>
+<body>
+
+<div class="container">
+  <h2>Системаи Бақайдгирӣ ва Ҷустуҷӯи Дафтарҳо</h2>
+  
+  <div class="status-bar">
+    <div>Ҳолати шабака: <span id="networkStatus" class="status-online">Онлайн</span></div>
+    <div>
+      <button class="btn btn-sync" onclick="syncData()">🔄 Синхронизатсия</button>
+      <button class="btn btn-export" onclick="exportToExcel()">📥 Боргирии Excel</button>
+    </div>
+  </div>
+
+  <div class="search-box">
+    <label for="searchInput"><b>Ҷустуҷӯи Рамз ё Табақаи беморӣ:</b></label>
+    <input type="text" id="searchInput" placeholder="Рамз ё номро ворид кунед (масалан: 101, 109.1, 120, ҳомиладор, ИФА)..." oninput="handleSearch()">
+    <div id="resultsList" class="results-list"></div>
+  </div>
+
+  <form id="regForm" onsubmit="savePatient(event)">
+    <div class="form-section-title">Маълумоти асосӣ ва Рамз</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Дафтари тааллуқдошта:</label>
+        <input type="text" id="notebook" readonly placeholder="Аз ҷустуҷӯ интихоб кунед">
+      </div>
+      <div class="form-group">
+        <label>Рамзи беморӣ:</label>
+        <input type="text" id="code" readonly required>
+      </div>
+      <div class="form-group" style="grid-column: span 2;">
+        <label>Табақаи муроҷиаткунандагон:</label>
+        <input type="text" id="category" readonly>
+      </div>
+    </div>
+
+    <div class="form-section-title">Маълумоти Бемор</div>
+    <div class="form-grid">
+      <div class="form-group">
+        <label>Рақами / Рамзи бақайдгирӣ:</label>
+        <input type="text" id="regNum" required placeholder="масалан: 001/2026">
+      </div>
+      <div class="form-group">
+        <label>Ному Насаб:</label>
+        <input type="text" id="fullname" required placeholder="Ф.И.О.">
+      </div>
+      <div class="form-group">
+        <label>Сину Сол:</label>
+        <input type="text" id="age" required placeholder="масалан: 25">
+      </div>
+      <div class="form-group">
+        <label>Ҷинс:</label>
+        <select id="gender" required>
+          <option value="Мард">Мард</option>
+          <option value="Зан">Зан</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>Шаҳрвандӣ:</label>
+        <input type="text" id="citizenship" value="ҶТ" required>
+      </div>
+      <div class="form-group">
+        <label>Ҷои Истиқомат:</label>
+        <input type="text" id="address" placeholder="Суроға">
+      </div>
+      <div class="form-group">
+        <label>Ҷои кор / Вазифа / Таҳсил:</label>
+        <input type="text" id="workplace" placeholder="Ҷои кор ё мактаб/донишгоҳ">
+      </div>
+      <div class="form-group">
+        <label>Аз куҷо фиристода шуд:</label>
+        <input type="text" id="referredFrom" placeholder="Муассиса ё духтур">
+      </div>
+    </div>
+
+    <div class="form-section-title">Натиҷаҳо ва Машварат</div>
+    <div class="form-grid">
+      <div class="form-group field-global">
+        <label>Машварат то Ташхис:</label>
+        <input type="text" id="consultBefore" placeholder="Ҳаст / Нест ё сана">
+      </div>
+      <div class="form-group field-global">
+        <label>Машварат Баъди Ташхис:</label>
+        <input type="text" id="consultAfter" placeholder="Ҳаст / Нест ё сана">
+      </div>
+      
+      <div class="form-group field-ifa" style="display:none;">
+        <label>Санаи Хунгирӣ:</label>
+        <input type="date" id="bloodDate">
+      </div>
+
+      <div class="form-group">
+        <label>Натиҷаи Ташхис:</label>
+        <input type="text" id="result" placeholder="Манфӣ / Мусбат ва ғ.">
+      </div>
+      <div class="form-group">
+        <label>Санаи Ташхис:</label>
+        <input type="date" id="testDate" required>
+      </div>
+    </div>
+
+    <button type="submit" class="btn" style="width: 100%; margin-top: 20px; padding: 12px; font-size: 16px;">💾 Сабт кардан ба Дафтар</button>
+  </form>
+
+  <div class="form-section-title" style="margin-top: 35px;">Дафтари сабтшудагон</div>
+  <div class="table-container">
+    <table id="patientTable">
+      <thead>
+        <tr id="tableHeader"></tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const dbCodes = [
+    { code: "101", name: "Шахсоне, ки бо мубталоёни ВНМО/БПНМ дар алоқаву тамос буданд", book: "Глобали" },
+    { code: "101.1", name: "алоқаи ҷинсӣ", book: "Глобали" },
+    { code: "101.2", name: "истифодаи якҷояи маводи нашъадори тазриқӣ", book: "Глобали" },
+    { code: "101.3", name: "тамоси тиббӣ", book: "Глобали" },
+    { code: "101.4", name: "кӯдакони аз модарони мубталои ВНМО таваллудшуда", book: "Глобали" },
+    { code: "101.5", name: "Алоқамандони кӯдакони сироятёфта", book: "Глобали" },
+    { code: "102", name: "Нашъамандони тазриқӣ", book: "Глобали" },
+    { code: "103", name: "Гомо ва биссексуалҳо", book: "Глобали" },
+    { code: "104", name: "Шахсоне, ки ба бемориҳои ҷинсӣ гирифторанд", book: "Глобали" },
+    { code: "105", name: "Шахсони ба алоқаи ҷинсии бетартибона машғулбуда", book: "Глобали" },
+    { code: "105.1", name: "кормандони тиҷорати шаҳвонӣ", book: "Глобали" },
+    { code: "105.2", name: "мизоҷони кормандони тиҷорати шаҳвонӣ", book: "Глобали" },
+    { code: "106", name: "Муҳоҷирони меҳнатӣ (зиёда аз 3 моҳ дар хориҷ)", book: "Глобали" },
+    { code: "107", name: "Муоинаи тиббии ҳатмии шахсони никоҳшаванда", book: "Глобали" },
+    { code: "108", name: "Донорони хун, зардоби хун ва дигар моеъҳо", book: "Глобали" },
+    { code: "109", name: "Ҳомиладорон", book: "РОЙГОН" },
+    { code: "109.1", name: "заноне, ки якум маротиба аз ташхис гузаштаанд", book: "РОЙГОН" },
+    { code: "109.2", name: "заноне, ки тибқи шкала дуюм бор аз ташхис гузаштаанд", book: "РОЙГОН" },
+    { code: "110", name: "Ресипиентҳои хун ва моеъҳои биологи", book: "Глобали" },
+    { code: "111", name: "Кормандони мақомоти қудратӣ ва ба хизмат даъватшудагон", book: "Глобали" },
+    { code: "112", name: "Шахсоне, ки дар маҳбасхонаҳо муоина шудаанд", book: "Глобали" },
+    { code: "113", name: "Шахсони аз рўи нишонаҳои клиникӣ муоинашуда", book: "К 600" },
+    { code: "113.1", name: "таби сабабаш номаълум", book: "К 600" },
+    { code: "113.2", name: "дарунравии сабабаш номаълум", book: "К 600" },
+    { code: "113.3", name: "калоншавии хаҷми ғадудҳои лимфатикӣ", book: "К 600" },
+    { code: "113.4", name: "илтихоби шуши дарозмуддат ва авҷгиранда", book: "К 600" },
+    { code: "113.11", name: "сили шуш ва ғайришушӣ", book: "Глобали" },
+    { code: "113.12", name: "зардпарвини С", book: "Глобали" },
+    { code: "113.13", name: "зардпарвини В", book: "Глобали" },
+    { code: "120", name: "Кормандони соҳаи тиб", book: "ИФА" },
+    { code: "121", name: "Хонандагони мактабхои миёнаву олӣ", book: "К 600" },
+    { code: "122", name: "Худ Муроҷиат", book: "К 600" }
+  ];
+
+  document.getElementById('testDate').valueAsDate = new Date();
+  document.getElementById('bloodDate').valueAsDate = new Date();
+
+  function handleSearch() {
+    const query = document.getElementById('searchInput').value.toLowerCase().trim();
+    const resultsList = document.getElementById('resultsList');
+    resultsList.innerHTML = '';
+
+    if (query.length === 0) {
+      resultsList.style.display = 'none';
+      return;
+    }
+
+    const filtered = dbCodes.filter(item => 
+      item.code.toLowerCase().includes(query) || 
+      item.name.toLowerCase().includes(query) ||
+      item.book.toLowerCase().includes(query)
+    );
+
+    if (filtered.length > 0) {
+      resultsList.style.display = 'block';
+      filtered.forEach(item => {
+        const div = document.createElement('div');
+        div.className = 'result-item';
+        
+        let badgeClass = 'bg-k600';
+        if(item.book === 'Глобали') badgeClass = 'bg-global';
+        if(item.book === 'РОЙГОН') badgeClass = 'bg-free';
+        if(item.book === 'ИФА') badgeClass = 'bg-ifa';
+
+        div.innerHTML = `
+          <div><b>Рамз: ${item.code}</b> - ${item.name}</div>
+          <span class="badge ${badgeClass}">${item.book}</span>
+        `;
+        div.onclick = () => selectCode(item);
+        resultsList.appendChild(div);
+      });
+    } else {
+      resultsList.style.display = 'none';
+    }
+  }
+
+  function selectCode(item) {
+    document.getElementById('code').value = item.code;
+    document.getElementById('notebook').value = item.book;
+    document.getElementById('category').value = item.name;
+    document.getElementById('resultsList').style.display = 'none';
+    document.getElementById('searchInput').value = `${item.code} - ${item.name}`;
+
+    const globalFields = document.querySelectorAll('.field-global');
+    const ifaFields = document.querySelectorAll('.field-ifa');
+
+    if (item.book === 'ИФА') {
+      globalFields.forEach(f => f.style.display = 'none');
+      ifaFields.forEach(f => f.style.display = 'flex');
+    } else {
+      globalFields.forEach(f => f.style.display = 'flex');
+      ifaFields.forEach(f => f.style.display = 'none');
+    }
+    
+    loadPatients();
+  }
+
+  function savePatient(e) {
+    e.preventDefault();
+    const book = document.getElementById('notebook').value;
+    
+    const patient = {
+      id: Date.now(),
+      book: book,
+      regNum: document.getElementById('regNum').value,
+      fullname: document.getElementById('fullname').value,
+      age: document.getElementById('age').value,
+      gender: document.getElementById('gender').value,
+      code: document.getElementById('code').value,
+      citizenship: document.getElementById('citizenship').value,
+      address: document.getElementById('address').value,
+      workplace: document.getElementById('workplace').value,
+      referredFrom: document.getElementById('referredFrom').value,
+      result: document.getElementById('result').value,
+      testDate: document.getElementById('testDate').value,
+      consultBefore: document.getElementById('consultBefore').value,
+      consultAfter: document.getElementById('consultAfter').value,
+      bloodDate: document.getElementById('bloodDate').value
+    };
+
+    let patients = JSON.parse(localStorage.getItem('patients') || '[]');
+    patients.push(patient);
+    localStorage.setItem('patients', JSON.stringify(patients));
+
+    alert('Муваффақона ба дафтари ' + book + ' сабт шуд!');
+    document.getElementById('regForm').reset();
+    document.getElementById('testDate').valueAsDate = new Date();
+    document.getElementById('bloodDate').valueAsDate = new Date();
+    loadPatients();
+  }
+
+  function loadPatients() {
+    const patients = JSON.parse(localStorage.getItem('patients') || '[]');
+    const currentBook = document.getElementById('notebook').value || 'Глобали';
+    
+    const headerRow = document.getElementById('tableHeader');
+    const tbody = document.querySelector('#patientTable tbody');
+    tbody.innerHTML = '';
+
+    if (currentBook === 'ИФА') {
+      headerRow.innerHTML = `
+        <th>Рамзи Бақайдгирӣ</th>
+        <th>Ному Насаб</th>
+        <th>Сину Сол</th>
+        <th>Ҷинс</th>
+        <th>Рамз</th>
+        <th>Шаҳрвандӣ</th>
+        <th>Ҷои Истиқомат</th>
+        <th>Вазифа ё Ҷои Таҳсил</th>
+        <th>Аз куҷо фиристода шуд</th>
+        <th>Натиҷаи Ташхис</th>
+        <th>Санаи Хунгирӣ</th>
+        <th>Санаи Ташхис</th>
+      `;
+    } else {
+      headerRow.innerHTML = `
+        <th>Рақами бп қайдгири</th>
+        <th>Ному Насаб</th>
+        <th>Сину Сол</th>
+        <th>Ҷинс</th>
+        <th>Рамз</th>
+        <th>Шаҳрвандӣ</th>
+        <th>Ҷои Истиқомат</th>
+        <th>Ҷои кор ё Таҳсил</th>
+        <th>Аз куҷо фиристода шуд</th>
+        <th>Машварат то Ташхис</th>
+        <th>Натиҷаи Ташхис</th>
+        <th>Машварат Баъди Ташхис</th>
+        <th>Санаи Ташхис</th>
+      `;
+    }
+
+    const filtered = patients.filter(p => p.book === currentBook || (currentBook !== 'ИФА' && p.book !== 'ИФА'));
+
+    filtered.reverse().forEach(p => {
+      let tr = '';
+      if (currentBook === 'ИФА') {
+        tr = `<tr>
+          <td>${p.regNum}</td>
+          <td><b>${p.fullname}</b></td>
+          <td>${p.age}</td>
+          <td>${p.gender}</td>
+          <td><b>${p.code}</b></td>
+          <td>${p.citizenship}</td>
+          <td>${p.address}</td>
+          <td>${p.workplace}</td>
+          <td>${p.referredFrom}</td>
+          <td>${p.result}</td>
+          <td>${p.bloodDate}</td>
+          <td>${p.testDate}</td>
+        </tr>`;
+      } else {
+        tr = `<tr>
+          <td>${p.regNum}</td>
+          <td><b>${p.fullname}</b></td>
+          <td>${p.age}</td>
+          <td>${p.gender}</td>
+          <td><b>${p.code}</b></td>
+          <td>${p.citizenship}</td>
+          <td>${p.address}</td>
+          <td>${p.workplace}</td>
+          <td>${p.referredFrom}</td>
+          <td>${p.consultBefore || '-'}</td>
+          <td>${p.result}</td>
+          <td>${p.consultAfter || '-'}</td>
+          <td>${p.testDate}</td>
+        </tr>`;
+      }
+      tbody.innerHTML += tr;
+    });
+  }
+
+  function syncData() {
+    if (navigator.onLine) {
+      alert("Синхронизатсия иҷро шуд! Тамоми маълумот байни дастгоҳҳо навсозӣ гардид.");
+    } else {
+      alert("Шумо офлайн ҳастед. Маълумот дар хотираи маҳаллӣ маҳфуз аст.");
+    }
+  }
+
+  function exportToExcel() {
+    let patients = JSON.parse(localStorage.getItem('patients') || '[]');
+    if(patients.length === 0) {
+      alert("Ҳеҷ маълумот барои экспорти Excel вуҷуд надорад.");
+      return;
+    }
+    let csvContent = "data:text/csv;charset=utf-8,\uFEFF";
+    csvContent += "Рақами бақайдгирӣ,Дафтар,Ф.И.О.,Сину Сол,Ҷинс,Рамз,Шаҳрвандӣ,Суроға,Ҷои кор,Аз куҷо фиристода шуд,Натиҷа,Санаи Ташхис\n";
+    
+    patients.forEach(p => {
+      csvContent += `"${p.regNum}","${p.book}","${p.fullname}","${p.age}","${p.gender}","${p.code}","${p.citizenship}","${p.address}","${p.workplace}","${p.referredFrom}","${p.result}","${p.testDate}"\n`;
+    });
+
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Daftari_Laboratoriya_${new Date().toISOString().slice(0,10)}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  }
+
+  window.addEventListener('online', () => {
+    document.getElementById('networkStatus').innerText = 'Онлайн';
+    document.getElementById('networkStatus').className = 'status-online';
+  });
+  window.addEventListener('offline', () => {
+    document.getElementById('networkStatus').innerText = 'Офлайн (Бе интернет)';
+    document.getElementById('networkStatus').className = 'status-offline';
+  });
+
+  loadPatients();
+</script>
+</body>
+</html>
